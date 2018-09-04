@@ -49,6 +49,26 @@ class PR_DHL_WC_Order_Ecomm extends PR_DHL_WC_Order {
 
 	public function additional_meta_box_fields( $order_id, $is_disabled, $dhl_label_items, $dhl_obj ) {
 
+		// Get saved weight, otherwise calculate it from the item weights
+		if( ! empty( $dhl_label_items['pr_dhl_weight'] ) ) {
+			$selected_weight_val = $dhl_label_items['pr_dhl_weight'];
+		} else {
+			$selected_weight_val = $this->calculate_order_weight( $order_id );
+		}
+		
+		$weight_units = get_option( 'woocommerce_weight_unit' );
+		// Get weight UoM and add in label
+		woocommerce_wp_text_input( array(
+			'id'	          	=> 'pr_dhl_weight',
+			'name'          	=> 'pr_dhl_weight',
+			'label'       		=> sprintf( __( 'Estimated shipment weight (%s) based on items ordered: ', 'pr-shipping-dhl' ), $weight_units),
+			'placeholder' 		=> '',
+			'description'		=> '',
+			'value'       		=> $selected_weight_val,
+			'custom_attributes'	=> array( $is_disabled => $is_disabled ),
+			'class'				=> 'wc_input_decimal' // adds JS to validate input is in price format
+		) );
+
 		if( $this->is_crossborder_shipment( $order_id ) ) {
 			
 			$dhl_label_items = $this->get_dhl_label_items( $order_id );
@@ -78,7 +98,7 @@ class PR_DHL_WC_Order_Ecomm extends PR_DHL_WC_Order {
 	 */
 	public function get_additional_meta_ids( ) {
 
-		return array( 'pr_dhl_description' );
+		return array( 'pr_dhl_weight', 'pr_dhl_description' );
 
 	}
 	

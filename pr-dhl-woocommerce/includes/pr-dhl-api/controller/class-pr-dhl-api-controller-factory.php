@@ -75,35 +75,8 @@ class PR_DHL_API_Controller_Factory {
 		$dhl_obj = null;
 
 		try {
-			switch ($country_code) {
-				case 'US':
-				case 'GU':
-				case 'AS':
-				case 'PR':
-				case 'UM':
-				case 'VI':
-				case 'CL':
-				case 'CA':
-				case 'SG':
-				case 'HK':
-				case 'TH':
-				case 'JP':
-				case 'CN':
-				case 'MY':
-				case 'VN':
-				case 'AU':
-				case 'IL':
-				case 'NZ':
-				case 'TW':
-				case 'KR':
-				case 'PH':
-				case 'IN':
-				case 'DE':
-				case 'AT':
-				default:
-					$dhl_obj = new PR_DHL_API_Controller_Express( $country_code );
-					break;
-			}
+			// Enable for ALL countries for now
+			$dhl_obj = new PR_DHL_API_Controller_Express( $country_code );
 		} catch (Exception $e) {
 			throw $e;
 		}

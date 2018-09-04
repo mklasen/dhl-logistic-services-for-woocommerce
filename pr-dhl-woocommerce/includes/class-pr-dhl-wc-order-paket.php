@@ -34,6 +34,25 @@ class PR_DHL_WC_Order_Paket extends PR_DHL_WC_Order {
 		// 	$selected_dhl_desc = $this->get_package_description( $order_id );
 		// }
 		
+		// Get saved weight, otherwise calculate it from the item weights
+		if( ! empty( $dhl_label_items['pr_dhl_weight'] ) ) {
+			$selected_weight_val = $dhl_label_items['pr_dhl_weight'];
+		} else {
+			$selected_weight_val = $this->calculate_order_weight( $order_id );
+		}
+		
+		$weight_units = get_option( 'woocommerce_weight_unit' );
+		// Get weight UoM and add in label
+		woocommerce_wp_text_input( array(
+			'id'	          	=> 'pr_dhl_weight',
+			'name'          	=> 'pr_dhl_weight',
+			'label'       		=> sprintf( __( 'Estimated shipment weight (%s) based on items ordered: ', 'pr-shipping-dhl' ), $weight_units),
+			'placeholder' 		=> '',
+			'description'		=> '',
+			'value'       		=> $selected_weight_val,
+			'custom_attributes'	=> array( $is_disabled => $is_disabled ),
+			'class'				=> 'wc_input_decimal' // adds JS to validate input is in price format
+		) );
 
 		$base_country_code = PR_DHL()->get_base_country();
 		
@@ -199,7 +218,7 @@ class PR_DHL_WC_Order_Paket extends PR_DHL_WC_Order {
 	 */
 	public function get_additional_meta_ids( ) {
 
-		return array( 'pr_dhl_preferred_day', 'pr_dhl_preferred_time', 'pr_dhl_preferred_location', 'pr_dhl_preferred_neighbor', 'pr_dhl_duties', 'pr_dhl_age_visual', 'pr_dhl_email_notification', 'pr_dhl_additional_insurance', 'pr_dhl_personally', 'pr_dhl_no_neighbor', 'pr_dhl_named_person', 'pr_dhl_premium', 'pr_dhl_bulky_goods'/*, 'pr_dhl_identcheck'*/ );
+		return array( 'pr_dhl_weight', 'pr_dhl_preferred_day', 'pr_dhl_preferred_time', 'pr_dhl_preferred_location', 'pr_dhl_preferred_neighbor', 'pr_dhl_duties', 'pr_dhl_age_visual', 'pr_dhl_email_notification', 'pr_dhl_additional_insurance', 'pr_dhl_personally', 'pr_dhl_no_neighbor', 'pr_dhl_named_person', 'pr_dhl_premium', 'pr_dhl_bulky_goods'/*, 'pr_dhl_identcheck'*/ );
 
 	}
 

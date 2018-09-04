@@ -173,6 +173,13 @@ class PR_DHL_WC_Method_Express extends WC_Shipping_Method {
 		}
 
 		$this->form_fields += array(
+			'dhl_cutoff_time' => array(
+					'title'             => __( 'Cut Off Time', 'pr-shipping-dhl' ),
+					'type'              => 'time',
+					'description'       => __( 'The cut-off time is the latest possible order time up to which an order can be guaranteed to be delivered that same day.', 'pr-shipping-dhl' ),
+					'desc_tip'          => true,
+ 					'default'           => '12:00',
+				),
 			'dhl_api'           => array(
 				'title'           => __( 'API Settings', 'pr-shipping-dhl' ),
 				'type'            => 'title',
@@ -378,10 +385,10 @@ class PR_DHL_WC_Method_Express extends WC_Shipping_Method {
 						$dhl_express = PR_DHL()->get_dhl_factory( true );
 						$use_services = $dhl_express->get_dhl_products_domestic();
 						$use_services += $dhl_express->get_dhl_products_international();
-						error_log(print_r($use_services,true));
+						// error_log(print_r($use_services,true));
 						
 						$custom_services = $this->get_option('express_products');
-						error_log(print_r($custom_services,true));
+						// error_log(print_r($custom_services,true));
 
 						// If the saved servics are empty, means first use of plugin
 						if( empty( $custom_services ) ) {
@@ -435,7 +442,7 @@ class PR_DHL_WC_Method_Express extends WC_Shipping_Method {
 	public function validate_express_products_field( $key ) {
 		$services         = array();
 		$posted_services  = $_POST['dhl_express_product'];
-		error_log(print_r($posted_services,true));
+		// error_log(print_r($posted_services,true));
 		foreach ( $posted_services as $code => $settings ) {
 
 			$services[ $code ] = array(
@@ -517,16 +524,18 @@ class PR_DHL_WC_Method_Express extends WC_Shipping_Method {
 
 	public function calculate_shipping( $package = array() ) {
 		// error_log(print_r($package,true));
+		
+		// Set tax status based on selection otherwise always taxed
+		$this->tax_status = $this->get_option( 'tax_status' );
 		$express_products = $this->get_option( 'express_products' );
-		error_log(print_r($express_products,true));
-		$args = $this->get_rates_args();
-		$args['shipping_address'] = $package['destination'];
+		// error_log(print_r($express_products,true));
+		$args = $this->get_rates_args( $package );
 
-		error_log(print_r($args,true));
+		// error_log(print_r($args,true));
 		try {
 			$dhl_express = PR_DHL()->get_dhl_factory( true );
 			$dhl_rates = $dhl_express->get_dhl_rates( $args );
-			error_log(print_r($dhl_rates,true));
+			// error_log(print_r($dhl_rates,true));
 
 			foreach ($express_products as $express_key => $express_value) {
 
@@ -615,14 +624,29 @@ class PR_DHL_WC_Method_Express extends WC_Shipping_Method {
 		return date( $wp_date_format, strtotime( $date ) );
 	}
 
-	protected function get_rates_args()	{
+	protected function get_rates_args( $package )	{
 
-		// $args['dhl_settings']['api_user'] = $this->get_option( 'dhl_api_user' );
-		// $args['dhl_settings']['api_pwd'] = $this->get_option( 'dhl_api_pwd' );
-		// $args['dhl_settings']['account_num'] = $this->get_option( 'dhl_account_num' );
+		// Get shipping address
+		$args['shipping_address'] = $package['destination'];
+
+		// Get cart items for total weight
+		$total_weight = 0;
+		// error_log(print_r(WC()->cart->get_cart(),true));
+		foreach ( WC()->cart->get_cart() as $cart_item_key => $item ) {
+			$product = wc_get_product( $item['product_id'] );
+
+			if ( $product ) {
+				$product_weight = $product->get_weight();
+				if( $product_weight ) {
+					$total_weight += ( $item['quantity'] * $product_weight );
+				}
+			}
+		}
+		// error_log($total_weight);
+		$args['order_details']['weight'] = $total_weight;
 		
 		// Method settings
-		$setting_ids = array( 'dhl_api_user','dhl_api_pwd', 'dhl_account_num', 'dhl_shipper_address','dhl_shipper_address2', 'dhl_shipper_address_city', 'dhl_shipper_address_state', 'dhl_shipper_address_zip' );
+		$setting_ids = array( 'dhl_api_user','dhl_api_pwd', 'dhl_account_num', 'dhl_cutoff_time', 'dhl_shipper_address','dhl_shipper_address2', 'dhl_shipper_address_city', 'dhl_shipper_address_state', 'dhl_shipper_address_zip' );
 
 		foreach ($setting_ids as $value) {
 			$api_key = str_replace('dhl_', '', $value);
@@ -632,10 +656,8 @@ class PR_DHL_WC_Method_Express extends WC_Shipping_Method {
 			}
 		}
 
-		$args['dhl_settings'][ 'shipper_country' ] = PR_DHL()->get_base_country();
-
 		// Receiver address
-
+		$args['dhl_settings']['shipper_country'] = PR_DHL()->get_base_country();
 
 		return $args;
 	}

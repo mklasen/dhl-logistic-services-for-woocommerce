@@ -197,39 +197,42 @@ abstract class PR_DHL_API_SOAP_WSSE implements PR_DHL_API_Base {
 		}
 	}
 	
-	protected function maybe_convert_weight( $weight, $UoM ) {
-		switch ( $UoM ) {
+	protected function maybe_convert_weight( $weight ) {
+
+		$weight_uom = get_option( 'woocommerce_weight_unit' );
+
+		switch ( $weight_uom ) {
 			case 'g':
 				$weight = $weight / 1000;
 				break;
-			case 'lb':
-				$weight = $weight / 2.2;
-				break;
 			case 'oz':
-				$weight = $weight / 35.274;
+				$weight = $weight / 16;
 				break;
 			default:
 				break;
 		}
+
 		return $weight;
 	}
 
-	protected function maybe_convert_dimension( $dimension, $UoM ) {
-		switch ( $UoM ) {
+	protected function maybe_convert_dimension( $dimension ) {
+
+		$dim_uom = get_option( 'woocommerce_dimension_unit' );
+
+		switch ( $dim_uom ) {
 			case 'm':
 				$dimension = $dimension  / 100;
 				break;
 			case 'mm':
 				$dimension = $dimension / .1;
 				break;
-			case 'in':
-				$dimension = $dimension / 2.54;
 			case 'yd':
-				$dimension = $dimension / 91.44;
+				$dimension = $dimension * 36;
 				break;
 			default:
 				break;
 		}
+
 		return $dimension;
 	}
 
@@ -248,4 +251,30 @@ abstract class PR_DHL_API_SOAP_WSSE implements PR_DHL_API_Base {
 	    return $array; 
 	} 	
 	// abstract protected function parse_response( );
+
+	protected function get_unit_of_measure() {
+
+		$weight_uom = get_option( 'woocommerce_weight_unit' );
+
+		switch ($weight_uom) {
+			case 'kg':
+				$uom = 'SI';
+				break;
+			case 'g':
+				$uom = 'SI';
+				break;
+			case 'lbs':
+				$uom = 'SU';
+				break;
+			case 'oz':
+				$uom = 'SU';
+				break;
+			default:
+				$uom = 'SI';
+				break;
+		}
+
+		return $uom;
+	}
+
 }

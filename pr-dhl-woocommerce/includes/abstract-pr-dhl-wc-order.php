@@ -86,13 +86,6 @@ abstract class PR_DHL_WC_Order {
 		// Get saved label input fields or set default values
 		$dhl_label_items = $this->get_dhl_label_items( $order_id );
 
-		// Get saved weight, otherwise calculate it from the item weights
-		if( ! empty( $dhl_label_items['pr_dhl_weight'] ) ) {
-			$selected_weight_val = $dhl_label_items['pr_dhl_weight'];
-		} else {
-			$selected_weight_val = $this->calculate_order_weight( $order_id );
-		}
-
 		// Get saved product, otherwise get the default product in settings
 		if( ! empty( $dhl_label_items['pr_dhl_product'] ) ) {
 			$selected_dhl_product = $dhl_label_items['pr_dhl_product'];
@@ -165,19 +158,6 @@ abstract class PR_DHL_WC_Order {
 				'custom_attributes'	=> array( $is_disabled => $is_disabled )
 			) );
 
-			$weight_units = get_option( 'woocommerce_weight_unit' );
-			// Get weight UoM and add in label
-			woocommerce_wp_text_input( array(
-				'id'	          	=> 'pr_dhl_weight',
-				'name'          	=> 'pr_dhl_weight',
-				'label'       		=> sprintf( __( 'Estimated shipment weight (%s) based on items ordered: ', 'pr-shipping-dhl' ), $weight_units),
-				'placeholder' 		=> '',
-				'description'		=> '',
-				'value'       		=> $selected_weight_val,
-				'custom_attributes'	=> array( $is_disabled => $is_disabled ),
-				'class'				=> 'wc_input_decimal' // adds JS to validate input is in price format
-			) );
-
 			$this->additional_meta_box_fields( $order_id, $is_disabled, $dhl_label_items, $dhl_obj );
 
 
@@ -205,11 +185,11 @@ abstract class PR_DHL_WC_Order {
 
 	public function save_meta_box( $post_id, $post = null ) {
 		// loop through inputs within id 'shipment-dhl-label-form'
-		$meta_box_ids = array( 'pr_dhl_product', 'pr_dhl_weight');
+		$meta_box_ids = array( 'pr_dhl_product' );
 		
 		$additional_meta_box_ids = $this->get_additional_meta_ids( );
 
-		error_log(print_r($_POST,true));
+		// error_log(print_r($_POST,true));
 		// $meta_box_ids += $additional_meta_box_ids;
 		$meta_box_ids = array_merge( $meta_box_ids, $additional_meta_box_ids );
 		foreach ($meta_box_ids as $key => $value) {
@@ -403,8 +383,11 @@ abstract class PR_DHL_WC_Order {
 			}
 			
 			$product_weight = $product->get_weight();
-			if( $product_weight ) {
-				$total_weight += ( $item['qty'] * $product_weight );
+			if ( $product ) {
+				$product_weight = $product->get_weight();
+				if( $product_weight ) {
+					$total_weight += ( $item['qty'] * $product_weight );
+				}
 			}
 		}
 
@@ -444,7 +427,7 @@ abstract class PR_DHL_WC_Order {
 		// Get DHL service product
 		$args['order_details']['dhl_product'] = $dhl_label_args['pr_dhl_product'];
 		// $args['order_details']['duties'] = $dhl_label_args['shipping_dhl_duties'];
-		$args['order_details']['weight'] = $dhl_label_args['pr_dhl_weight'];
+		// $args['order_details']['weight'] = $dhl_label_args['pr_dhl_weight'];
 
 		// Get WC specific details; order id, currency, units of measure, COD amount (if COD used)
 		$args['order_details']['order_id'] = $order_id;

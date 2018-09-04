@@ -44,21 +44,130 @@ class PR_DHL_API_Model_SOAP_WSSE_Label extends PR_DHL_API_SOAP_WSSE implements P
 		}
 	}*/
 
+	/**
+	 * Recursively prepares the data before sending the request to the SOAP server. Basically,
+	 * converting your array-based data into something that the soap service can understand.
+	 *
+	 * @param array $data The data to convert into a SoapVar parameter
+	 * @param string $request The type of request that this data is supposed to go to
+	 * @param object $dom The DOMDocument object
+	 * @param object $parent The current parent node
+	 * @param boolean $recursing Indicates whether a recursing process is current running or not
+	 *
+	 * @return object
+	 */
+	protected function prepare_soap_parameter($data, $request = '', &$dom = null, &$parent = null, $recursing = false) {
+
+		try {
+			if (!is_array($data) && !$recursing) {
+				throw new Exception('prepare_soap_parameter: The submitted parameter is not an array.');
+			}
+
+			if (is_null($dom)) {
+				if (!class_exists('DOMDocument')) throw new Exception('prepare_soap_parameter: Class "DOMDocument" does not exists.');
+				$dom = new DOMDocument("1.0", "utf-8");
+				$dom->preserveWhiteSpace = false;
+				$dom->formatOutput = false;
+
+				if (!empty($request)) {
+					$root = '';
+					switch ($request) {
+						case 'shipment':
+							$root = 'ShipmentRequest';
+							break;
+						case 'rate':
+							$root = 'RateRequest';
+							break;
+						case 'delete':
+							$root = 'DeleteRequest';
+							break;
+					}
+					$parent = $dom->createElement($root);
+					$dom->appendChild($parent);
+				}
+			}
+
+			if (is_null($parent)) {
+				$parent = $dom;
+			}
+
+			if (is_array($data)) {
+				foreach ($data as $key => $value) {
+					if ('_attributes' == $key) continue;
+
+					if (is_array($value)) {
+						if (!function_exists('array_intersect_assoc')) throw new Exception('prepare_soap_parameter: Function "array_intersect_assoc" does not exists.');
+						$intersect = array_intersect_assoc(array_keys($value), range(0, count($value) - 1));
+					}
+
+					if (is_array($value) && count($value) == count($intersect)) {
+						// multiple items:
+						foreach ($value as $i => $item) {
+							$node = $dom->createElement($key);
+
+							if (!empty($item['_attributes'])) {
+								foreach ($item['_attributes'] as $attrib_name => $attrib_value) {
+									$attrib = $dom->createAttribute($attrib_name);
+									$attrib->value = $attrib_value;
+
+									$node->appendChild($attrib);
+								}
+							}	
+
+							$parent->appendChild($node);
+							$this->prepare_soap_parameter($item, $request, $dom, $node, true);
+						}
+					} else {
+						$node = $dom->createElement($key);
+
+						if (is_array($value) && !empty($value)) {
+							if (!empty($value['_attributes'])) {
+								foreach ($value['_attributes'] as $attrib_name => $attrib_value) {
+									$attrib = $dom->createAttribute($attrib_name);
+									$attrib->value = $attrib_value;
+
+									$node->appendChild($attrib);
+								}
+							}	
+
+							$parent->appendChild($node);
+							$this->prepare_soap_parameter($value, $request, $dom, $node, true);
+						} else {
+							$node->nodeValue = $value;
+							$parent->appendChild($node);
+						}
+					}
+
+					
+				}
+			}
+
+			if (!class_exists('SoapVar')) throw new Exception('prepare_soap_parameter: Class "SoapVar" does not exists.');
+			return new SoapVar($dom->saveXML($dom->documentElement), XSD_ANYXML);
+
+		} catch (Exception $e) {
+			throw $e;
+		}
+	}
+
 	public function get_dhl_label( $args ) {
 		error_log('get_dhl_label');
 		error_log(print_r($args,true));
 		$this->set_arguments( $args );
-		$soap_request = $this->set_message();
+		$soap_request = $this->prepare_soap_parameter($this->set_message(), 'shipment');
+		///$soap_request = $this->set_message();
 
 		try {
 			$soap_client = $this->get_access_token( $args['dhl_settings']['api_user'], $args['dhl_settings']['api_pwd'] );
-			PR_DHL()->log_msg( '"createShipmentOrder" called with: ' . print_r( $soap_request, true ) );
+			PR_DHL()->log_msg( '"createShipmentOrder" called with: ' . print_r( $this->body_request, true ) );
+
 
 			$response_body = $soap_client->createShipmentRequest($soap_request);
+
 			// error_log(print_r($soap_client->__getLastRequest(),true));
 			error_log(print_r($response_body,true));
 
-			PR_DHL()->log_msg( 'Response Body: ' . print_r( $response_body, true ) );
+			PR_DHL()->log_msg( 'Response Body: Success' );
 		
 			if( ! empty( $response_body->Notification->code ) ) {
 				throw new Exception( $response_body->Notification->code . ' - ' . $response_body->Notification->Message );
@@ -81,7 +190,8 @@ class PR_DHL_API_Model_SOAP_WSSE_Label extends PR_DHL_API_SOAP_WSSE implements P
 
 		} catch (Exception $e) {
 			// error_log('get dhl label Exception');
-			// error_log(print_r($soap_client->__getLastRequest(),true));
+			error_log(print_r($soap_client->__getLastRequest(),true));
+			PR_DHL()->log_msg( 'Response Body: ' . print_r( $response_body, true ) );
 			throw $e;
 		}
 	}
@@ -109,7 +219,7 @@ class PR_DHL_API_Model_SOAP_WSSE_Label extends PR_DHL_API_SOAP_WSSE implements P
 						array(
 							'PickupDate' => $args['order_details']['pr_dhl_ship_date'],
 							'PickupCountry' => $args['dhl_settings']['shipper_country'],
-							'DispatchConfirmationNumber' => '1111',
+							'DispatchConfirmationNumber' => '1111', // WHERE TO GET THIS?
 							'RequestorName' => $args['dhl_settings']['shipper_name']
 						)
 				);
@@ -192,20 +302,20 @@ class PR_DHL_API_Model_SOAP_WSSE_Label extends PR_DHL_API_SOAP_WSSE implements P
 		}
 
 
-		if ( empty( $args['order_details']['weightUom'] )) {
-			throw new Exception( __('Shop "Weight Units of Measure" is empty!', 'pr-shipping-dhl') );
-		}
+		// if ( empty( $args['order_details']['weightUom'] )) {
+		// 	throw new Exception( __('Shop "Weight Units of Measure" is empty!', 'pr-shipping-dhl') );
+		// }
 
-		if ( empty( $args['order_details']['weight'] )) {
-			throw new Exception( __('Order "Weight" is empty!', 'pr-shipping-dhl') );
-		}
+		// if ( empty( $args['order_details']['weight'] )) {
+		// 	throw new Exception( __('Order "Weight" is empty!', 'pr-shipping-dhl') );
+		// }
 
 		// Validate weight
-		try {
-			$this->validate_field( 'weight', $args['order_details']['weight'] );
-		} catch (Exception $e) {
-			throw new Exception( 'Weight - ' . $e->getMessage() );
-		}
+		// try {
+		// 	$this->validate_field( 'weight', $args['order_details']['weight'] );
+		// } catch (Exception $e) {
+		// 	throw new Exception( 'Weight - ' . $e->getMessage() );
+		// }
 
 		if( PR_DHL()->is_crossborder_shipment( $args['shipping_address']['country'] ) ) {
 			
@@ -332,18 +442,7 @@ class PR_DHL_API_Model_SOAP_WSSE_Label extends PR_DHL_API_SOAP_WSSE implements P
 		
 		$this->query_string = http_build_query($dhl_label_query_string);
 	}
-
-	protected function is_european_shipment() {
-		
-		// if ( ! empty( $this->args['dhl_settings'][ 'shipper_country' ] ) && ! empty( $this->args['shipping_address']['country'] ) && ( $this->args['dhl_settings'][ 'shipper_country' ] == $this->args['shipping_address']['country'] ) ) {
-		if ( ! empty( $this->args['shipping_address']['country'] ) && in_array( $this->args['shipping_address']['country'], $this->eu_iso2 ) ) {
-			return true;
-		} else {
-			return false;
-		}
-	}
 	
-
 	protected function set_message() {
 		if( ! empty( $this->args ) ) {
 			// Set date related functions to German time
@@ -399,20 +498,62 @@ class PR_DHL_API_Model_SOAP_WSSE_Label extends PR_DHL_API_SOAP_WSSE implements P
 			}
 
 			// Packages
+			/*
+			   [
+	            '_' => [
+	                'Weight' => 1,
+	                'Dimensions' => [
+	                    'Length' => 1,
+	                    'Width' => 1,
+	                    'Height' => 1,
+	                ],
+	                'CustomerPreferences' => 1,
+	            ],
+	            'number' => 1,
+		        ],
+		        [
+		            '_' => [
+		                'Weight' => 1,
+		                'Dimensions' => [
+		                    'Length' => 1,
+		                    'Width' => 1,
+		                    'Height' => 1,
+		                ],
+		                'CustomerPreferences' => 1,
+		            ],
+		            'number' => 2,
+		        ],
+		    ],
+			*/
 			$packages_arr = array();
 			foreach ( $this->args['order_details']['packages'] as $package_key => $package) {
 				// 'RequestedPackages' =>
-				$temp_package['number'] = $package_key + 1;
+				/*$temp_package['number'] = $package_key + 1;
 				$temp_package['Weight']['Value'] = $package['weight'];
 				$temp_package['Dimensions']['Length'] = $package['length'];
 				$temp_package['Dimensions']['Width'] = $package['width'];
 				$temp_package['Dimensions']['Height'] = $package['height'];
-				$temp_package['CustomerReferences'] = $temp_package['number']; // TEMPORARILY UNTIL INPUT ADDED
+				$temp_package['CustomerReferences'] = $temp_package['number']; // TEMPORARILY UNTIL INPUT ADDED*/
 
-				array_push($packages_arr, $temp_package);
+				$number = $package_key + 1;
+				$packages_arr[] = array(
+					'_attributes' => array(
+						'number' => $number
+					),
+					'Weight' => $this->maybe_convert_weight( $package['weight'] ),
+					'Dimensions' => array(
+						'Length' => $this->maybe_convert_dimension( $package['length'] ),
+						'Width' => $this->maybe_convert_dimension( $package['width'] ),
+						'Height' => $this->maybe_convert_dimension( $package['height'] ),
+					),
+					'CustomerReferences' => $package['number']
+				);
+
+				//array_push($packages_arr, $temp_package);
 			}
 
 			// error_log(print_r($packages_arr,true));
+			$unit_of_measure = $this->get_unit_of_measure();
 
 			$dhl_label_body = 
 				array(
@@ -429,7 +570,7 @@ class PR_DHL_API_Model_SOAP_WSSE_Label extends PR_DHL_API_SOAP_WSSE implements P
 										'ServiceType' => $this->args['order_details']['dhl_product'],
 										'Account' => $this->args['dhl_settings']['account_num'],
 										'Currency' => $this->args['order_details']['currency'],
-										'UnitOfMeasurement' => 'SI',
+										'UnitOfMeasurement' => $unit_of_measure,
 										'SpecialServices' => $special_services_arr,
 								),
 							'ShipTimestamp' => $ship_date, // 2018-03-05T15:33:16GMT+01:00

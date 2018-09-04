@@ -179,129 +179,33 @@ class PR_DHL_API_Model_SOAP_WSSE_Rate extends PR_DHL_API_SOAP_WSSE implements PR
 			throw new Exception( __('Please, provide an account in the DHL shipping settings', 'pr-shipping-dhl' ) );
 		}
 
-/*
-		if ( empty( $args['order_details']['weightUom'] )) {
-			throw new Exception( __('Shop "Weight Units of Measure" is empty!', 'pr-shipping-dhl') );
-		}
+		// Convert weight
+		$args['order_details']['weight'] = $this->maybe_convert_weight( $args['order_details']['weight'] );
 
-		if ( empty( $args['order_details']['weight'] )) {
-			throw new Exception( __('Order "Weight" is empty!', 'pr-shipping-dhl') );
-		}
-
-		// Validate weight
-		try {
-			$this->validate_field( 'weight', $args['order_details']['weight'] );
-		} catch (Exception $e) {
-			throw new Exception( 'Weight - ' . $e->getMessage() );
-		}
-
-		// if ( empty( $args['order_details']['duties'] )) {
-		// 	throw new Exception( __('DHL "Duties" is empty!', 'pr-shipping-dhl') );
-		// }
-
-		if ( empty( $args['order_details']['currency'] )) {
-			throw new Exception( __('Shop "Currency" is empty!', 'pr-shipping-dhl') );
-		}
-
-		// Validate shipping address
-		if ( empty( $args['shipping_address']['address_1'] )) {
-			throw new Exception( __('Shipping "Address 1" is empty!', 'pr-shipping-dhl') );
-		}
-
-		if ( empty( $args['shipping_address']['city'] )) {
-			throw new Exception( __('Shipping "City" is empty!', 'pr-shipping-dhl') );
-		}
-
-		if ( empty( $args['shipping_address']['country'] )) {
-			throw new Exception( __('Shipping "Country" is empty!', 'pr-shipping-dhl') );
-		}
-
-		// If address 2 missing, set last piece of an address to be address 2
-		if ( empty( $args['shipping_address']['address_2'] )) {
-			// Break address into pieces			
-			$address_exploded = explode(' ', $args['shipping_address']['address_1']);
-			// Get last piece, assuming it is street number 
-			$last_index = sizeof($address_exploded);
-
-			// Set last index as street number
-			$args['shipping_address']['address_2'] = $address_exploded[ $last_index - 1 ];
-
-			// Unset it in address 1
-			unset( $address_exploded[ $last_index - 1 ] );
-
-			// Set address 1 without street number
-			$args['shipping_address']['address_1'] = implode(' ', $address_exploded );
-		}
-
-		// Add default values for required fields that might not be passed e.g. phone
-		$default_args = array( 'shipping_address' => 
-									array( 'name' => '',
-											'company' => '',
-											'address_2' => '',
-											'email' => '',
-											// 'idNumber' => '',
-											// 'idType' => '',
-											'postcode' => '',
-											'state' => '',
-											'phone' => ' '
-											),
-						);
-
-		$args['shipping_address'] = wp_parse_args( $args['shipping_address'], $default_args['shipping_address'] );
-		// $args['order_details'] = wp_parse_args( $args['order_details'], $default_args['order_details'] );
-
-		$default_args_item = array( 
-									'item_description' => '',
-									'sku' => '',
-									'line_total' => 0,
-									'country_origin' => '',
-									'hs_code' => '',
-									'qty' => 1
-									);
-
-		foreach ($args['items'] as $key => $item) {
-			
-			if ( ! empty( $item['hs_code'] ) ) {
-				try {
-					$this->validate_field( 'hs_code', $item['hs_code'] );
-				} catch (Exception $e) {
-					throw new Exception( 'HS Code - ' . $e->getMessage() );
-				}
-			}
-
-			$args['items'][$key] = wp_parse_args( $item, $default_args_item );			
-		}
-*/
 		$this->args = $args;
-	}
-
-	protected function set_query_string() {
-		$dhl_label_query_string = 
-			array( 'format' => self::DHL_LABEL_FORMAT,
-					'labelSize' => self::DHL_LABEL_SIZE,
-					'pageSize' => self::DHL_PAGE_SIZE,
-					'layout' => self::DHL_LAYOUT,
-					'autoClose' => self::DHL_AUTO_CLOSE );
-		
-		$this->query_string = http_build_query($dhl_label_query_string);
-	}
-
-	protected function is_european_shipment() {
-		
-		// if ( ! empty( $this->args['dhl_settings'][ 'shipper_country' ] ) && ! empty( $this->args['shipping_address']['country'] ) && ( $this->args['dhl_settings'][ 'shipper_country' ] == $this->args['shipping_address']['country'] ) ) {
-		if ( ! empty( $this->args['shipping_address']['country'] ) && in_array( $this->args['shipping_address']['country'], $this->eu_iso2 ) ) {
-			return true;
-		} else {
-			return false;
-		}
 	}
 	
 
 	protected function set_message() {
 		if( ! empty( $this->args ) ) {
-			// Set date related functions to German time
+			
+			if( isset( $this->args['dhl_settings']['cutoff_time'] ) ) {
+				// Get current date/time
+				$today = new DateTime();
+				$today_timestamp = $today->getTimestamp();
+				// If passed cut off time, check next day's delivery NOT today's
+				if( $today_timestamp >= strtotime( $this->args['dhl_settings']['cutoff_time'] ) ) {
+					// Add 1 day
+					$today->add( new DateInterval('P1D') );
+					// Set time to 09:00 since it's next day, otherwise time could be set late
+					$ship_time_stamp = $today->format('Y-m-d\T09:00:00\G\M\TP');
+				} else {
+					$ship_time_stamp = $today->format('Y-m-d\TH:i:s\G\M\TP');
+				}
 
-			// $this->args['order_details']['weight'] = $this->maybe_convert_weight( $this->args['order_details']['weight'], $this->args['order_details']['weightUom'] );
+			}
+
+			$unit_of_measure = $this->get_unit_of_measure();
 
 			$dhl_label_body = 
 				array(
@@ -341,7 +245,7 @@ class PR_DHL_API_Model_SOAP_WSSE_Rate extends PR_DHL_API_SOAP_WSSE implements PR
 												'number' =>  1,
 												'Weight' =>  
 													array(
-														'Value' => 1 // CONVERT TO KG ALWAYS!
+														'Value' => $this->args['order_details']['weight']
 													),
 												'Dimensions' =>
 													array(
@@ -353,8 +257,9 @@ class PR_DHL_API_Model_SOAP_WSSE_Rate extends PR_DHL_API_SOAP_WSSE implements PR
 									),
 								'NextBusinessDay' => 'Y',
 								// 'ShipTimestamp' => date('Y-m-d\TH:i:s\G\M\TP', time() + 60*60*24 ),
-								'ShipTimestamp' => date('Y-m-d\TH:i:s\G\M\TP', time() ), // 2018-03-05T15:33:16GMT+01:00
-								'UnitOfMeasurement' => 'SI',
+								// 'ShipTimestamp' => date('Y-m-d\TH:i:s\G\M\TP', time() ), // 2018-03-05T15:33:16GMT+01:00
+								'ShipTimestamp' => $ship_time_stamp, // 2018-03-05T15:33:16GMT+01:00
+								'UnitOfMeasurement' => $unit_of_measure,
 								// 'Content' => 'NON_DOCUMENTS', // 'NON_DOCUMENTS' for non-EU and 'DOCUMENT' for EU packages!
 								'PaymentInfo' => 'DDP',
 								'Account' => $this->args['dhl_settings']['account_num'],
