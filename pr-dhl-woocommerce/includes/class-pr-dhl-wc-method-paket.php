@@ -38,7 +38,7 @@ class PR_DHL_WC_Method_Paket extends WC_Shipping_Method {
 		$this->init_settings();
 
 		add_action( 'woocommerce_update_options_shipping_' . $this->id, array( $this, 'process_admin_options' ) );
-		// add_action( 'admin_enqueue_scripts', array( $this, 'load_admin_scripts' ) );
+		add_action( 'admin_enqueue_scripts', array( $this, 'load_admin_scripts' ) );
 		
 	}
 
@@ -48,16 +48,7 @@ class PR_DHL_WC_Method_Paket extends WC_Shipping_Method {
 			return;
 	    }
 
-	    $test_con_data = array( 
-	    					'ajax_url' => admin_url( 'admin-ajax.php' ),
-						    'loader_image'   => admin_url( 'images/loading.gif' ),
-	    					'test_con_nonce' => wp_create_nonce( 'pr-dhl-test-con' ) 
-	    				);
-
-		// wp_enqueue_style( 'wc-shipment-dhl-label-css', PR_DHL_PLUGIN_DIR_URL . '/assets/css/pr-dhl-admin.css' );		
-		wp_enqueue_script( 'wc-shipment-dhl-testcon-js', PR_DHL_PLUGIN_DIR_URL . '/assets/js/pr-dhl-test-connection.js', array('jquery'), PR_DHL_VERSION );
-		// in JavaScript, object properties are accessed as ajax_object.ajax_url, ajax_object.we_value
-		wp_localize_script( 'wc-shipment-dhl-testcon-js', 'dhl_test_con_obj', $test_con_data );
+        wp_enqueue_script( 'wc-shipment-dhl-admin', PR_DHL_PLUGIN_DIR_URL . '/assets/js/pr-dhl-admin.js', array('jquery'), PR_DHL_VERSION );
 	}
 
 	/**
@@ -99,6 +90,9 @@ class PR_DHL_WC_Method_Paket extends WC_Shipping_Method {
 		} catch (Exception $e) {
 			PR_DHL()->log_msg( __('DHL Products not displaying - ', 'pr-shipping-dhl') . $e->getMessage() );
 		}
+
+        $countries = WC()->countries->get_countries();
+        $countries = array_merge( array('0' => __( '- select country -', 'pr-shipping-dhl' )  ), $countries );
 
 		$this->form_fields = array(
 			'dhl_pickup_dist'     => array(
@@ -159,6 +153,25 @@ class PR_DHL_WC_Method_Paket extends WC_Shipping_Method {
 				'type'            => 'title',
 				'description'     => __( 'Please configure the shipping label settings.', 'pr-shipping-dhl' ),
 			),
+            'dhl_store_origin' => array(
+                'title'   => __('Country Origin', 'pr-shipping-dhl'),
+                'type'    => 'select',
+                'class'   => 'wc-enhanced-select',
+                'description' => __('Select whether to use the set store country or select another country origin below.', 'pr-shipping-dhl'),
+                'options' => array(
+                    'store_country' => __('Store Country', 'pr-shipping-dhl'),
+                    'select_country' => __('Select Country', 'pr-shipping-dhl')
+                ),
+                'desc_tip'          => true,
+            ),
+            'dhl_select_store_origin' => array(
+                'title'       => __('Select Store Origin', 'pr-shipping-dhl'),
+                'type'        => 'select',
+                'class'       => 'wc-enhanced-select',
+                'description' => __('Select a different store origin than the one in the WooCommerce settings.', 'pr-shipping-dhl'),
+                'options'     => $countries,
+                'desc_tip'          => true,
+            ),
 			'dhl_default_product_dom' => array(
 				'title'             => __( 'Domestic Default Service', 'pr-shipping-dhl' ),
 				'type'              => 'select',

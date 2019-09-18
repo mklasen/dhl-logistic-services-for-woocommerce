@@ -344,6 +344,11 @@ class PR_DHL_WC {
 	}
 
 	public function get_base_country() {
+	    $shipping_dhl_settings = $this->get_shipping_dhl_settings();
+	    if( isset( $shipping_dhl_settings['dhl_store_origin'] ) && ( $shipping_dhl_settings['dhl_store_origin'] == 'select_country' ) ) {
+            return $shipping_dhl_settings['dhl_select_store_origin'];
+        }
+
 		$country_code = wc_get_base_location();
 		return $country_code['country'];
 	}
